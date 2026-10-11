@@ -25,3 +25,24 @@ Rename-Computer -NewName "DC01" -Restart
 - Checked with `ipconfig /all`: host DC01, DHCP off, 10.0.50.10/24,
   gateway 10.0.50.1, DNS 1.1.1.1
   
+### AD DS and DNS
+```powershell
+Install-WindowsFeature AD-Domain-Services -IncludeManagementTools
+Install-ADDSForest -DomainName "corp.tclab.internal" -DomainNetbiosName "TCLAB" -InstallDns
+Set-DnsClientServerAddress -InterfaceAlias "Ethernet" -ServerAddresses 10.0.50.10
+Add-DnsServerForwarder -IPAddress 1.1.1.1
+```
+- The forwarder was already set. The promotion carried 1.1.1.1 over from the old DNS setting.
+
+### Troubleshooting: dcdiag failures after first boot
+- `dcdiag /q` failed DFSREvent and SystemLog
+- SystemLog: event 5774, Netlogon couldn't register the `_ldap._tcp` SRV record at 7:15 PM (first boot)
+- DFSREvent: a 6016 warning in the DFS Replication log at the same minute
+```powershell
+ipconfig /registerdns
+Restart-Service Netlogon
+Resolve-DnsName _ldap._tcp.corp.tclab.internal -Type SRV
+Get-WinEvent -LogName "DFS Replication" -MaxEvents 5
+```
+- Result: SRV record resolves to dc01 (10.0.50.10), event 4602 shows SYSVOL initialized, and SYSVOL and NETLOGON are shared. Both errors came from the first boot, not a live problem.
+- Screenshot: screenshots/01-dc-troubleshoot.png
