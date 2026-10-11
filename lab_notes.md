@@ -42,7 +42,24 @@ Add-DnsServerForwarder -IPAddress 1.1.1.1
 ipconfig /registerdns
 Restart-Service Netlogon
 Resolve-DnsName _ldap._tcp.corp.tclab.internal -Type SRV
+
+
 Get-WinEvent -LogName "DFS Replication" -MaxEvents 5
 ```
 - Result: SRV record resolves to dc01 (10.0.50.10), event 4602 shows SYSVOL initialized, and SYSVOL and NETLOGON are shared. Both errors came from the first boot, not a live problem.
 - Screenshot: screenshots/01-dc-troubleshoot.png
+
+## Q02 Client join (Oct 10, 2026)
+- VM CLIENT01: Windows 11 Enterprise Evaluation, 4 GB RAM, 2 CPUs,
+  64 GB dynamic disk, adapter on LabNet, local account labadmin
+```powershell
+New-NetIPAddress -InterfaceAlias "Ethernet" -IPAddress 10.0.50.21 -PrefixLength 24 -DefaultGateway 10.0.50.1
+Set-DnsClientServerAddress -InterfaceAlias "Ethernet" -ServerAddresses 1.1.1.1
+Set-TimeZone -Id "Pacific Standard Time"
+slmgr /ato
+```
+
+### Troubleshooting
+- Fresh install showed "Windows License is expired". `slmgr /dlv` said grace time expired (0xC004F009). The evaluation had never activated because the VM had no network yet. Gave it an address, ran `slmgr /ato`, now Licensed for 90 days.
+- First `slmgr /ato` failed with 0x80072EE7 (name not resolved). `Test-NetConnection 1.1.1.1 -Port 53` succeeded, so routing was fine. Reran it a minute later and it worked. Likely ran before the new IP finished coming up.
+- VM was very slow during the Guest Additions install. VirtualBox showed Execution Engine: native API, Nested Paging: Inactive. Hyper-V is active on the host (likely for Memory Integrity), so VirtualBox runs on top of it in a slower mode. Left it on for now.
